@@ -1,5 +1,7 @@
 # kernel
 
+![screenshot](assets/image.png)
+
 Simple x86_64 operating system written from scratch in C and assembly. Boots via UEFI, no Linux kernel involved.
 
 What we got so far:

@@ -8,3 +8,4 @@ build/
 *.vbox-prev
 *.log
 *.png
+!assets/*.png

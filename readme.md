@@ -1,31 +1,55 @@
 # kernel
 
-![screenshot](assets/image.png)
-
 Simple x86_64 operating system written from scratch in C and assembly. Boots via UEFI, no Linux kernel involved.
 
-What we got so far:
+![os](assets/image.png)
 
-UEFI bootloader that loads an ELF kernel from the ESP, gets the memory map and framebuffer info from GOP, exits boot services, and jumps to ring 0.
+## OS Fundamentals
 
-Framebuffer console with an 8x16 bitmap font for early text output. GDT, IDT, PIC remapping, and a PIT timer running at 100hz.
+**Boot** — UEFI bootloader loads an ELF kernel from the ESP, grabs the memory map and framebuffer from GOP, exits boot services, jumps to ring 0.
 
-Physical memory manager using a bitmap allocator over the UEFI memory map. Virtual memory manager with 4 level paging, identity mapped first 4GB using 2MB huge pages, and a higher half kernel mirror at 0xFFFF800000000000. Kernel heap allocator (kmalloc/kfree/krealloc) built on top of the PMM.
+**Display** — Framebuffer console with an 8x16 bitmap font for early text output.
 
-Preemptive round robin scheduler with kernel threads. Each task gets its own stack, context switch is 14 instructions of assembly saving and restoring callee saved registers plus RSP.
+**Interrupts** — GDT with TSS, full IDT, PIC remapping, PIT timer at 100hz.
 
-We also did some page table manipulation stuff. Hidden pages where you allocate physical memory and remove all virtual mappings so it's invisible to any scanner. Split TLB demo exploiting separate instruction and data TLBs to make the same virtual address return different physical pages depending on whether you read or execute.
+**Memory** — Physical memory manager (bitmap allocator over the UEFI memory map), virtual memory manager with 4-level paging, identity mapped first 4GB using 2MB huge pages, higher half kernel mirror at `0xFFFF800000000000`. Kernel heap allocator (kmalloc/kfree/krealloc) built on the PMM.
 
-Hardware debug register watchpoints using DR0 through DR7 to trap on memory writes with zero overhead. CR0.WP bypass to write through read only page protection by clearing a single bit in CR0.
+**Scheduler** — Preemptive round-robin with kernel threads. Each task gets its own stack with a guard page. Context switch is 14 instructions of assembly saving/restoring callee-saved registers plus RSP.
 
-On top of all that we built a security focused hypervisor using Intel VT-x. The kernel launches itself into VMX non-root mode (blue pill style subversion) so the hypervisor runs transparently underneath. It traps CR0 and CR4 writes via VMCS guest-host masks to prevent the kernel from disabling write protection, SMEP, or SMAP. MSR bitmap is configured to intercept writes to LSTAR, IA32_DEBUGCTL, and SYSENTER_EIP so critical system entry points can't be silently redirected.
+## Low-Level Manipulation
 
-Hypercall interface using VMCALL with dispatch on RAX for authorized kernel to hypervisor communication. LSTAR can be redirected through the hypercall API but direct WRMSR attempts are denied. Monitor trap flag support for invisible single stepping of guest instructions when the hardware supports it.
+**Hidden pages** — Allocate physical memory and remove all virtual mappings so the data is invisible to anything walking page tables.
 
-VMCS integrity verification runs on every single VM exit, checking HOST_RIP, HOST_RSP, HOST_CR3, MSR bitmap address, CR masks, and execution controls against a known good snapshot. If any field is tampered with the hypervisor halts immediately rather than resuming a compromised guest. The VMXON region, VMCS, and MSR bitmap physical pages are unmapped from the guest virtual address space after launch so ring 0 code can't write to them through the identity mapping.
+**Split TLB** — Exploit the split between ITLB and DTLB to make the same virtual address return different physical pages depending on whether you read or execute.
 
-Anti debug enforcement through the exception bitmap. When enabled the hypervisor traps #DB and #BP exceptions at the VMX level before they reach the guest IDT. Hardware breakpoints are silently cleared and INT3 software breakpoints are swallowed. An attacker can set debug registers but the exceptions never fire from the guest perspective.
+**Hardware watchpoints** — DR0 through DR7 to trap on memory writes with zero overhead.
 
-EPT (extended page tables) is implemented with identity mapped 2MB huge pages for the first 4GB but currently disabled under VirtualBox due to limitations in its nested VMX emulation. Untested on bare metal and KVM.
+**CR0.WP bypass** — Clear write-protect in CR0 to write through read-only page table protections from ring 0.
 
-Builds with gcc, nasm, and the mingw cross compiler for the UEFI loader. Runs in VirtualBox with EFI and nested VT-x enabled.
+## Hypervisor (Intel VT-x)
+
+![hypervisor](assets/hypervisor.png)
+
+**Blue pill subversion** — The kernel launches itself into VMX non-root mode so the hypervisor runs transparently underneath.
+
+**CR0/CR4 trapping** — VMCS guest-host masks prevent the kernel from disabling write protection, SMEP, or SMAP.
+
+**MSR protection** — MSR bitmap intercepts writes to LSTAR, IA32_DEBUGCTL, and SYSENTER_EIP. Direct WRMSR is denied, authorized changes go through the hypercall interface.
+
+**Hypercall interface** — VMCALL dispatch on RAX for kernel-to-hypervisor communication. Supports LSTAR redirect/restore, monitor trap flag, anti-debug toggle, and integrity queries.
+
+**VMCS integrity** — Every VM exit verifies HOST_RIP, HOST_RSP, HOST_CR3, MSR bitmap address, CR masks, and execution controls against a known-good snapshot. Any tampering halts the system immediately.
+
+**Self-protection** — VMXON, VMCS, and MSR bitmap physical pages are unmapped from the guest virtual address space after launch. Ring 0 cannot write to hypervisor structures through the identity mapping.
+
+**Anti-debug** — Exception bitmap traps #DB and #BP at the VMX level before they reach the guest IDT. Hardware breakpoints are silently cleared, INT3 is swallowed. Debug registers can be set but exceptions never fire from the guest's perspective.
+
+**EPT** — Extended page tables implemented with identity-mapped 2MB huge pages for the first 4GB. Currently disabled under VirtualBox due to nested VMX limitations. Untested on bare metal and KVM.
+
+## Building
+
+Requires `gcc`, `nasm`, `x86_64-w64-mingw32-gcc`, `mtools`, `dosfstools`, and `VBoxManage`.
+
+```
+bash build.sh run
+```

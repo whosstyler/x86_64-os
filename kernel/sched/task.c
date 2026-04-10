@@ -1,9 +1,12 @@
 #include "task.h"
 #include "../mm/heap.h"
+#include "../mm/pmm.h"
+#include "../mm/vmm.h"
 
 PTASK CurrentTask;
 
 static UINT64 NextTid = 0;
+static UINT64 NextStackVirt = 0x0000000600000000ULL;
 
 static VOID
 TASK_TRAMPOLINE(VOID)
@@ -36,7 +39,22 @@ CREATE_TASK(
     )
 {
     PTASK Task = (PTASK)KMALLOC(sizeof(TASK));
-    Task->StackBase = (UINT8 *)KMALLOC(TASK_STACK_SIZE);
+
+    UINT64 GuardVirt = NextStackVirt;
+    NextStackVirt += PAGE_SIZE;
+
+    UINT64 StackVirt = NextStackVirt;
+    UINT64 I;
+    for (I = 0; I < TASK_STACK_PAGES; I++)
+    {
+        UINT64 Phys = ALLOC_PAGE();
+        MAP_PAGE(StackVirt + I * PAGE_SIZE, Phys, PTE_WRITABLE);
+    }
+    NextStackVirt += TASK_STACK_SIZE;
+
+    (VOID)GuardVirt;
+
+    Task->StackBase = (UINT8 *)StackVirt;
     Task->Entry     = Entry;
     Task->State     = TASK_READY;
     Task->Tid       = NextTid++;

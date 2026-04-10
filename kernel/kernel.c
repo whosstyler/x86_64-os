@@ -4,6 +4,7 @@
 #include "mm/vmm.h"
 #include "mm/heap.h"
 #include "sched/task.h"
+#include "hv/vmx.h"
 
 extern VOID TIMER_TICK(VOID);
 extern UINT64 GET_TICK_COUNT(VOID);
@@ -122,7 +123,7 @@ FB_PUTCHAR(
     }
 }
 
-static VOID
+VOID
 FB_PRINT(
     const char *S
     )
@@ -134,7 +135,7 @@ FB_PRINT(
     }
 }
 
-static VOID
+VOID
 FB_PRINT_HEX(
     UINT64 Value
     )
@@ -332,6 +333,8 @@ KERNEL_MAIN(
     INIT_HEAP();
     FB_PRINT("heap ok\n");
 
+    INIT_CPU_SECURITY();
+
     INIT_SCHEDULER();
     FB_PRINT("scheduler ok\n");
 
@@ -372,7 +375,20 @@ KERNEL_MAIN(
     FB_PRINT_HEX(WatchedVar);
     FB_PRINT("\n");
 
-    /* ---- CR0.WP write-protect bypass ---- */
+    /* ---- launch hypervisor ---- */
+    FB_CLEAR();
+    FB_PRINT("--- hypervisor ---\n");
+    UINT8 HvResult = INIT_VMX();
+    if (HvResult)
+    {
+        FB_PRINT("hv not available, skipping hv demos\n");
+    }
+    else
+    {
+        FB_PRINT("os now running under hypervisor control\n");
+    }
+
+    /* ---- CR0.WP bypass attempt (hypervisor should block it) ---- */
     FB_PRINT("\n--- cr0.wp bypass ---\n");
     UINT64 WpPhys = ALLOC_PAGE();
     UINT64 WpVirt = 0x0000000500000000ULL;
@@ -386,26 +402,122 @@ KERNEL_MAIN(
     INVLPG(WpVirt);
     FB_PRINT("page now read-only\n");
 
+    FB_PRINT("attempting CR0.WP clear...\n");
     UINT64 Cr0 = READ_CR0();
     WRITE_CR0(Cr0 & ~(1ULL << 16));
-    FB_PRINT("CR0.WP cleared\n");
 
-    *(volatile UINT64 *)WpVirt = 0xBEEFULL;
-
-    WRITE_CR0(Cr0);
-    FB_PRINT("CR0.WP restored\n");
-
-    UINT64 WpRead = *(volatile UINT64 *)WpVirt;
-    FB_PRINT("read back from RO page: ");
-    FB_PRINT_HEX(WpRead);
-    if (WpRead == 0xBEEFULL)
+    UINT64 Cr0After = READ_CR0();
+    if (Cr0After & (1ULL << 16))
     {
-        FB_PRINT(" (bypass worked!)");
+        FB_PRINT("CR0.WP still set! hypervisor blocked it\n");
     }
-    FB_PRINT("\n");
+    else
+    {
+        FB_PRINT("CR0.WP cleared (no hv protection)\n");
+        *(volatile UINT64 *)WpVirt = 0xBEEFULL;
+        WRITE_CR0(Cr0);
+        FB_PRINT("CR0.WP restored\n");
+
+        UINT64 WpRead = *(volatile UINT64 *)WpVirt;
+        FB_PRINT("read back: ");
+        FB_PRINT_HEX(WpRead);
+        FB_PRINT("\n");
+    }
 
     UNMAP_PAGE(WpVirt);
     FREE_PAGE(WpPhys);
+
+    if (!HvResult)
+    {
+        /* ---- hypercall interface ---- */
+        FB_PRINT("\n--- hypercall interface ---\n");
+        UINT64 PingResult = VMCALL_HV(HVCALL_PING, 0, 0);
+        FB_PRINT("VMCALL ping reply: ");
+        FB_PRINT_HEX(PingResult);
+        FB_PRINT("\n");
+
+        /* ---- monitor trap flag single-stepping ---- */
+        FB_PRINT("\n--- monitor trap flag ---\n");
+        FB_PRINT("single-stepping 5 guest instructions...\n");
+        UINT64 MtfResult = VMCALL_HV(HVCALL_MTF_START, 5, 0);
+        if (MtfResult == 0)
+        {
+            __asm__ volatile("nop");
+            __asm__ volatile("nop");
+            __asm__ volatile("nop");
+            __asm__ volatile("nop");
+            __asm__ volatile("nop");
+            FB_PRINT("guest resumes (was invisible to us)\n");
+        }
+        else
+        {
+            FB_PRINT("mtf not available in this environment\n");
+        }
+
+        /* ---- LSTAR intercept & redirect ---- */
+        FB_PRINT("\n--- lstar intercept ---\n");
+        UINT64 CurLstar = VMCALL_HV(HVCALL_LSTAR_GET, 0, 0);
+        FB_PRINT("current LSTAR: ");
+        FB_PRINT_HEX(CurLstar);
+        FB_PRINT("\n");
+
+        FB_PRINT("direct WRMSR to LSTAR (should be denied)...\n");
+        WRMSR(0xC0000082, 0xDEADC0DE00000000ULL);
+
+        CurLstar = VMCALL_HV(HVCALL_LSTAR_GET, 0, 0);
+        FB_PRINT("LSTAR unchanged: ");
+        FB_PRINT_HEX(CurLstar);
+        FB_PRINT("\n");
+
+        FB_PRINT("hypercall redirect (authorized)...\n");
+        VMCALL_HV(HVCALL_LSTAR_REDIRECT, 0xFFFF800000001000ULL, 0);
+
+        CurLstar = VMCALL_HV(HVCALL_LSTAR_GET, 0, 0);
+        FB_PRINT("LSTAR after redirect: ");
+        FB_PRINT_HEX(CurLstar);
+        FB_PRINT("\n");
+
+        VMCALL_HV(HVCALL_LSTAR_RESTORE, 0, 0);
+        CurLstar = VMCALL_HV(HVCALL_LSTAR_GET, 0, 0);
+        FB_PRINT("LSTAR after restore: ");
+        FB_PRINT_HEX(CurLstar);
+        FB_PRINT("\n");
+
+        /* ---- hypervisor self-protection ---- */
+        FB_PRINT("\n--- hv self-protection ---\n");
+        UINT64 IntResult = VMCALL_HV(HVCALL_CHECK_INTEGRITY, 0, 0);
+        FB_PRINT("vmcs integrity check: ");
+        if (IntResult == 0)
+            FB_PRINT("CLEAN\n");
+        else
+            FB_PRINT("CORRUPTED!\n");
+        FB_PRINT("vmxon/vmcs/msr-bitmap unmapped from guest\n");
+
+        /* ---- anti-debug enforcement ---- */
+        FB_PRINT("\n--- anti-debug ---\n");
+        VMCALL_HV(HVCALL_ANTIDEBUG_ON, 0, 0);
+
+        volatile UINT64 DebugTarget = 0;
+        WRITE_DR0((UINT64)&DebugTarget);
+        WRITE_DR6(0);
+        WRITE_DR7(0x00090001ULL);
+
+        FB_PRINT("hw breakpoint armed, triggering write...\n");
+        DebugTarget = 0x1337;
+
+        UINT64 Dr7After = READ_DR7();
+        FB_PRINT("DR7 after: ");
+        FB_PRINT_HEX(Dr7After);
+        FB_PRINT("\n");
+        if (!(Dr7After & 1))
+            FB_PRINT("hypervisor wiped debug registers\n");
+
+        FB_PRINT("executing INT3...\n");
+        __asm__ volatile("int3");
+        FB_PRINT("INT3 swallowed by hypervisor\n");
+
+        VMCALL_HV(HVCALL_ANTIDEBUG_OFF, 0, 0);
+    }
 
     FB_PRINT("\nall demos complete.\n");
     __asm__ volatile("sti");

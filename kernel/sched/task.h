@@ -9,7 +9,8 @@ typedef VOID (*TASK_ENTRY)(VOID);
 #define TASK_RUNNING 1
 #define TASK_DEAD    2
 
-#define TASK_STACK_SIZE (PAGE_SIZE * 4)
+#define TASK_STACK_PAGES 4
+#define TASK_STACK_SIZE  (PAGE_SIZE * TASK_STACK_PAGES)
 
 typedef struct _TASK
 {

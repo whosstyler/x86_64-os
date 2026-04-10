@@ -62,19 +62,25 @@ BUILD_KERNEL() {
     nasm -f elf64 -o "${OUTPUT_DIR}/obj/entry.o"     "${KERNEL_DIR}/arch/entry.asm"
     nasm -f elf64 -o "${OUTPUT_DIR}/obj/gdt_flush.o" "${KERNEL_DIR}/arch/gdt_flush.asm"
     nasm -f elf64 -o "${OUTPUT_DIR}/obj/isr.o"       "${KERNEL_DIR}/arch/isr.asm"
-    nasm -f elf64 -o "${OUTPUT_DIR}/obj/switch.o"   "${KERNEL_DIR}/sched/switch.asm"
+    nasm -f elf64 -o "${OUTPUT_DIR}/obj/switch.o"    "${KERNEL_DIR}/sched/switch.asm"
+    nasm -f elf64 -o "${OUTPUT_DIR}/obj/vmx_asm.o"   "${KERNEL_DIR}/hv/vmx_asm.asm"
 
     local CFLAGS="-ffreestanding -fno-stack-protector -mno-red-zone -nostdlib -Wall -Wextra -mcmodel=large -c"
-    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/kernel.o" "${KERNEL_DIR}/kernel.c"
-    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/gdt.o"    "${KERNEL_DIR}/arch/gdt.c"
-    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/idt.o"    "${KERNEL_DIR}/arch/idt.c"
-    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/pic.o"    "${KERNEL_DIR}/arch/pic.c"
-    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/timer.o"  "${KERNEL_DIR}/drivers/timer.c"
-    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/font.o"   "${KERNEL_DIR}/gfx/font.c"
-    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/pmm.o"    "${KERNEL_DIR}/mm/pmm.c"
-    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/vmm.o"    "${KERNEL_DIR}/mm/vmm.c"
-    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/heap.o"   "${KERNEL_DIR}/mm/heap.c"
-    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/task.o"   "${KERNEL_DIR}/sched/task.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/kernel.o"   "${KERNEL_DIR}/kernel.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/gdt.o"      "${KERNEL_DIR}/arch/gdt.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/idt.o"      "${KERNEL_DIR}/arch/idt.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/pic.o"      "${KERNEL_DIR}/arch/pic.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/security.o" "${KERNEL_DIR}/arch/security.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/timer.o"    "${KERNEL_DIR}/drivers/timer.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/font.o"     "${KERNEL_DIR}/gfx/font.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/pmm.o"      "${KERNEL_DIR}/mm/pmm.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/vmm.o"      "${KERNEL_DIR}/mm/vmm.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/heap.o"     "${KERNEL_DIR}/mm/heap.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/task.o"     "${KERNEL_DIR}/sched/task.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/vmx.o"      "${KERNEL_DIR}/hv/vmx.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/vmexit.o"   "${KERNEL_DIR}/hv/vmexit.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/ept.o"      "${KERNEL_DIR}/hv/ept.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/hv_sec.o"   "${KERNEL_DIR}/hv/security.c"
 
     ld -T "${KERNEL_DIR}/linker.ld" -nostdlib \
       -o "${KERNEL_ELF}" \
@@ -85,13 +91,19 @@ BUILD_KERNEL() {
       "${OUTPUT_DIR}/obj/idt.o" \
       "${OUTPUT_DIR}/obj/isr.o" \
       "${OUTPUT_DIR}/obj/pic.o" \
+      "${OUTPUT_DIR}/obj/security.o" \
       "${OUTPUT_DIR}/obj/timer.o" \
       "${OUTPUT_DIR}/obj/font.o" \
       "${OUTPUT_DIR}/obj/pmm.o" \
       "${OUTPUT_DIR}/obj/vmm.o" \
       "${OUTPUT_DIR}/obj/heap.o" \
       "${OUTPUT_DIR}/obj/task.o" \
-      "${OUTPUT_DIR}/obj/switch.o"
+      "${OUTPUT_DIR}/obj/switch.o" \
+      "${OUTPUT_DIR}/obj/vmx.o" \
+      "${OUTPUT_DIR}/obj/vmx_asm.o" \
+      "${OUTPUT_DIR}/obj/vmexit.o" \
+      "${OUTPUT_DIR}/obj/ept.o" \
+      "${OUTPUT_DIR}/obj/hv_sec.o"
 
     echo "built: ${KERNEL_ELF}"
 }

@@ -83,6 +83,7 @@ CREATE_VM() {
       --memory "${VM_RAM_MB}" \
       --cpus "${VM_CPUS}" \
       --ioapic on \
+      --nested-hw-virt on \
       --boot1 disk \
       --boot2 none \
       --boot3 none \
@@ -156,6 +157,8 @@ main() {
         echo "power it off before reattaching disk"
         exit 1
     fi
+
+    VBoxManage modifyvm "${VM_NAME}" --nested-hw-virt on >/dev/null 2>&1 || true
 
     if [[ "${rebuild_vdi}" == "1" ]]; then
         REBUILD_VDI

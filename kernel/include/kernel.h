@@ -208,6 +208,84 @@ WRITE_DR7(
     __asm__ volatile("mov %0, %%dr7" : : "r"(Value));
 }
 
+static inline UINT64
+READ_DR7(VOID)
+{
+    UINT64 Value;
+    __asm__ volatile("mov %%dr7, %0" : "=r"(Value));
+    return Value;
+}
+
+static inline UINT64
+READ_CR4(VOID)
+{
+    UINT64 Value;
+    __asm__ volatile("mov %%cr4, %0" : "=r"(Value));
+    return Value;
+}
+
+static inline VOID
+WRITE_CR4(
+    UINT64 Value
+    )
+{
+    __asm__ volatile("mov %0, %%cr4" : : "r"(Value) : "memory");
+}
+
+static inline VOID
+DO_CPUID(
+    UINT32 Leaf,
+    UINT32 Subleaf,
+    UINT32 *Eax,
+    UINT32 *Ebx,
+    UINT32 *Ecx,
+    UINT32 *Edx
+    )
+{
+    __asm__ volatile("cpuid"
+        : "=a"(*Eax), "=b"(*Ebx), "=c"(*Ecx), "=d"(*Edx)
+        : "a"(Leaf), "c"(Subleaf));
+}
+
+static inline UINT64
+RDMSR(
+    UINT32 Msr
+    )
+{
+    UINT32 Lo, Hi;
+    __asm__ volatile("rdmsr" : "=a"(Lo), "=d"(Hi) : "c"(Msr));
+    return ((UINT64)Hi << 32) | Lo;
+}
+
+static inline VOID
+WRMSR(
+    UINT32 Msr,
+    UINT64 Value
+    )
+{
+    __asm__ volatile("wrmsr"
+        : : "c"(Msr), "a"((UINT32)Value), "d"((UINT32)(Value >> 32)));
+}
+
+typedef struct __attribute__((packed)) _TSS64
+{
+    UINT32 Reserved0;
+    UINT64 Rsp0;
+    UINT64 Rsp1;
+    UINT64 Rsp2;
+    UINT64 Reserved1;
+    UINT64 Ist1;
+    UINT64 Ist2;
+    UINT64 Ist3;
+    UINT64 Ist4;
+    UINT64 Ist5;
+    UINT64 Ist6;
+    UINT64 Ist7;
+    UINT64 Reserved2;
+    UINT16 Reserved3;
+    UINT16 IopbOffset;
+} TSS64, *PTSS64;
+
 typedef struct __attribute__((packed)) _INTERRUPT_FRAME
 {
     UINT64 Rip;
@@ -216,6 +294,10 @@ typedef struct __attribute__((packed)) _INTERRUPT_FRAME
     UINT64 Rsp;
     UINT64 Ss;
 } INTERRUPT_FRAME;
+
+VOID INIT_CPU_SECURITY(VOID);
+VOID FB_PRINT(const char *S);
+VOID FB_PRINT_HEX(UINT64 Value);
 
 VOID
 KERNEL_MAIN(

@@ -1,0 +1,10 @@
+build/
+*.o
+*.elf
+*.efi
+*.img
+*.vdi
+*.vbox
+*.vbox-prev
+*.log
+*.png

@@ -26,6 +26,6 @@ VMCS integrity verification runs on every single VM exit, checking HOST_RIP, HOS
 
 Anti debug enforcement through the exception bitmap. When enabled the hypervisor traps #DB and #BP exceptions at the VMX level before they reach the guest IDT. Hardware breakpoints are silently cleared and INT3 software breakpoints are swallowed. An attacker can set debug registers but the exceptions never fire from the guest perspective.
 
-EPT (extended page tables) is implemented with identity mapped 2MB huge pages for the first 4GB but currently disabled under VirtualBox due to limitations in its nested VMX emulation. Works on bare metal and KVM.
+EPT (extended page tables) is implemented with identity mapped 2MB huge pages for the first 4GB but currently disabled under VirtualBox due to limitations in its nested VMX emulation. Untested on bare metal and KVM.
 
 Builds with gcc, nasm, and the mingw cross compiler for the UEFI loader. Runs in VirtualBox with EFI and nested VT-x enabled.

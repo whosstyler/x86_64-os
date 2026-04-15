@@ -73,6 +73,8 @@ BUILD_KERNEL() {
     gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/security.o" "${KERNEL_DIR}/arch/security.c"
     gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/timer.o"    "${KERNEL_DIR}/drivers/timer.c"
     gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/font.o"     "${KERNEL_DIR}/gfx/font.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/draw.o"     "${KERNEL_DIR}/gfx/draw.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/keyboard.o" "${KERNEL_DIR}/drivers/keyboard.c"
     gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/pmm.o"      "${KERNEL_DIR}/mm/pmm.c"
     gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/vmm.o"      "${KERNEL_DIR}/mm/vmm.c"
     gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/heap.o"     "${KERNEL_DIR}/mm/heap.c"
@@ -94,6 +96,8 @@ BUILD_KERNEL() {
       "${OUTPUT_DIR}/obj/security.o" \
       "${OUTPUT_DIR}/obj/timer.o" \
       "${OUTPUT_DIR}/obj/font.o" \
+      "${OUTPUT_DIR}/obj/draw.o" \
+      "${OUTPUT_DIR}/obj/keyboard.o" \
       "${OUTPUT_DIR}/obj/pmm.o" \
       "${OUTPUT_DIR}/obj/vmm.o" \
       "${OUTPUT_DIR}/obj/heap.o" \

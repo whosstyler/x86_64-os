@@ -1,21 +1,23 @@
 #include "include/kernel.h"
 #include "gfx/font.h"
+#include "gfx/draw.h"
 #include "mm/pmm.h"
 #include "mm/vmm.h"
 #include "mm/heap.h"
 #include "sched/task.h"
 #include "hv/vmx.h"
+#include "drivers/keyboard.h"
 
 extern VOID TIMER_TICK(VOID);
 extern UINT64 GET_TICK_COUNT(VOID);
 
 static volatile UINT8 SchedulerActive = 0;
 
-static UINT32 *Framebuffer;
-static UINT32  FbWidth;
-static UINT32  FbHeight;
-static UINT32  FbPitch;
-static UINT32  FbPixelFormat;
+UINT32 *Framebuffer;
+UINT32  FbWidth;
+UINT32  FbHeight;
+UINT32  FbPitch;
+UINT32  FbPixelFormat;
 
 static UINT32  CursorCol = 0;
 static UINT32  CursorRow = 0;
@@ -229,23 +231,6 @@ IRQ_HANDLER(
     if (IrqNum == 0)
     {
         TIMER_TICK();
-
-        UINT64 Ticks = GET_TICK_COUNT();
-        if ((Ticks % TIMER_HZ) == 0)
-        {
-            UINT32 SaveCol = CursorCol;
-            UINT32 SaveRow = CursorRow;
-
-            CursorCol = 0;
-            CursorRow = MaxRows - 1;
-            FB_PRINT("uptime: ");
-            FB_PRINT_HEX(Ticks / TIMER_HZ);
-            FB_PRINT(" sec  ");
-
-            CursorCol = SaveCol;
-            CursorRow = SaveRow;
-        }
-
         PIC_SEND_EOI(0);
         if (SchedulerActive)
         {
@@ -254,7 +239,288 @@ IRQ_HANDLER(
         return;
     }
 
+    if (IrqNum == 1)
+    {
+        KB_IRQ_HANDLER();
+    }
+
     PIC_SEND_EOI((UINT8)IrqNum);
+}
+
+static UINT8
+STREQUAL(
+    const char *A,
+    const char *B
+    )
+{
+    while (*A && *B)
+    {
+        if (*A != *B) return 0;
+        A++;
+        B++;
+    }
+    return *A == *B;
+}
+
+static UINT32
+STRLEN(
+    const char *S
+    )
+{
+    UINT32 Len = 0;
+    while (S[Len]) Len++;
+    return Len;
+}
+
+static VOID
+FB_PRINT_DEC(
+    UINT64 Value
+    )
+{
+    char Buf[21];
+    INT64 I = 0;
+
+    if (Value == 0)
+    {
+        FB_PUTCHAR('0');
+        return;
+    }
+
+    while (Value > 0)
+    {
+        Buf[I++] = '0' + (Value % 10);
+        Value /= 10;
+    }
+
+    while (--I >= 0)
+    {
+        FB_PUTCHAR(Buf[I]);
+    }
+}
+
+#define SHELL_BUF_SIZE 256
+#define SHELL_PROMPT   "kernel> "
+
+#define COLOR_TITLE_BG  0x002A2D3E
+#define COLOR_TITLE_FG  0x0088C0D0
+#define COLOR_ACCENT    0x005E81AC
+#define COLOR_SUCCESS   0x00A3BE8C
+#define COLOR_ERROR     0x00BF616A
+#define COLOR_INFO      0x00EBCB8B
+#define COLOR_BORDER    0x004C566A
+
+static VOID
+SHELL_DRAW_BANNER(VOID)
+{
+    UINT32 BannerH = FONT_HEIGHT * 3;
+    FB_FILL_RECT(0, 0, FbWidth, BannerH, COLOR_TITLE_BG);
+    FB_DRAW_HLINE(0, BannerH, FbWidth, COLOR_ACCENT);
+    FB_DRAW_HLINE(0, BannerH + 1, FbWidth, COLOR_ACCENT);
+
+    const char *Title = "x86_64-os kernel shell";
+    UINT32 TitleLen = STRLEN(Title);
+    UINT32 TitleX = (FbWidth - TitleLen * FONT_WIDTH) / 2;
+    UINT32 TitleY = FONT_HEIGHT;
+    UINT32 I;
+
+    for (I = 0; I < TitleLen; I++)
+    {
+        FB_DRAW_CHAR(TitleX + I * FONT_WIDTH, TitleY, Title[I], COLOR_TITLE_FG, COLOR_TITLE_BG);
+    }
+}
+
+static VOID
+SHELL_CMD_HELP(VOID)
+{
+    FB_PRINT("  help       show this message\n");
+    FB_PRINT("  clear      clear the screen\n");
+    FB_PRINT("  info       system information\n");
+    FB_PRINT("  mem        memory stats\n");
+    FB_PRINT("  draw       draw primitive demo\n");
+    FB_PRINT("  uptime     seconds since boot\n");
+    FB_PRINT("  echo <s>   print text back\n");
+    FB_PRINT("  reboot     triple fault reset\n");
+}
+
+static VOID
+SHELL_CMD_INFO(VOID)
+{
+    FB_PRINT("  x86_64-os  |  UEFI boot  |  ring 0\n");
+    FB_PRINT("  fb: ");
+    FB_PRINT_DEC(FbWidth);
+    FB_PRINT("x");
+    FB_PRINT_DEC(FbHeight);
+    FB_PRINT(" (pitch ");
+    FB_PRINT_DEC(FbPitch);
+    FB_PRINT(")\n");
+    FB_PRINT("  timer: PIT @ ");
+    FB_PRINT_DEC(TIMER_HZ);
+    FB_PRINT("hz\n");
+    FB_PRINT("  pixel format: ");
+    if (FbPixelFormat == PIXEL_FORMAT_RGBX)
+        FB_PRINT("RGBX\n");
+    else
+        FB_PRINT("BGRX\n");
+}
+
+static VOID
+SHELL_CMD_DRAW(VOID)
+{
+    UINT32 BaseX = 40;
+    UINT32 BaseY = CursorRow * FONT_HEIGHT + FONT_HEIGHT;
+
+    FB_FILL_RECT(BaseX, BaseY, 80, 60, COLOR_ACCENT);
+    FB_DRAW_RECT(BaseX + 100, BaseY, 80, 60, COLOR_SUCCESS);
+    FB_DRAW_LINE(BaseX + 200, BaseY, BaseX + 280, BaseY + 60, COLOR_ERROR);
+    FB_DRAW_LINE(BaseX + 280, BaseY, BaseX + 200, BaseY + 60, COLOR_ERROR);
+    FB_FILL_CIRCLE(BaseX + 340, BaseY + 30, 28, COLOR_INFO);
+    FB_DRAW_CIRCLE(BaseX + 420, BaseY + 30, 28, COLOR_TITLE_FG);
+
+    CursorRow += (60 / FONT_HEIGHT) + 2;
+    if (CursorRow >= MaxRows)
+    {
+        CursorRow = MaxRows - 1;
+    }
+    FB_PRINT("  fill_rect | draw_rect | lines | fill_circle | circle\n");
+}
+
+static VOID
+SHELL_CMD_UPTIME(VOID)
+{
+    UINT64 Ticks = GET_TICK_COUNT();
+    UINT64 Secs  = Ticks / TIMER_HZ;
+
+    FB_PRINT("  ");
+    FB_PRINT_DEC(Secs);
+    FB_PRINT(" seconds (");
+    FB_PRINT_DEC(Ticks);
+    FB_PRINT(" ticks)\n");
+}
+
+static VOID
+SHELL_CMD_REBOOT(VOID)
+{
+    FB_PRINT("  rebooting...\n");
+
+    /* triple fault: load a null IDT and trigger an interrupt */
+    IDT_PTR NullIdt;
+    NullIdt.Limit = 0;
+    NullIdt.Base  = 0;
+    __asm__ volatile("lidt %0" : : "m"(NullIdt));
+    __asm__ volatile("int3");
+
+    for (;;) { __asm__ volatile("hlt"); }
+}
+
+static VOID
+SHELL_PROCESS_CMD(
+    char *Buf,
+    UINT32 Len
+    )
+{
+    if (Len == 0) return;
+
+    if (STREQUAL(Buf, "help"))
+    {
+        SHELL_CMD_HELP();
+    }
+    else if (STREQUAL(Buf, "clear"))
+    {
+        FB_CLEAR();
+        SHELL_DRAW_BANNER();
+        CursorRow = 4;
+        CursorCol = 0;
+    }
+    else if (STREQUAL(Buf, "info"))
+    {
+        SHELL_CMD_INFO();
+    }
+    else if (STREQUAL(Buf, "mem"))
+    {
+        FB_PRINT("  heap: KMALLOC/KFREE active\n");
+        FB_PRINT("  pmm:  bitmap allocator\n");
+        FB_PRINT("  vmm:  4-level paging, higher-half @ 0xFFFF800000000000\n");
+    }
+    else if (STREQUAL(Buf, "draw"))
+    {
+        SHELL_CMD_DRAW();
+    }
+    else if (STREQUAL(Buf, "uptime"))
+    {
+        SHELL_CMD_UPTIME();
+    }
+    else if (Len > 5 && Buf[0] == 'e' && Buf[1] == 'c' && Buf[2] == 'h' && Buf[3] == 'o' && Buf[4] == ' ')
+    {
+        FB_PRINT("  ");
+        FB_PRINT(Buf + 5);
+        FB_PRINT("\n");
+    }
+    else if (STREQUAL(Buf, "reboot"))
+    {
+        SHELL_CMD_REBOOT();
+    }
+    else
+    {
+        FB_PRINT("  unknown command: ");
+        FB_PRINT(Buf);
+        FB_PRINT("\n  type 'help' for commands\n");
+    }
+}
+
+static VOID
+SHELL_RUN(VOID)
+{
+    char Buf[SHELL_BUF_SIZE];
+    UINT32 Pos = 0;
+
+    FB_CLEAR();
+    SHELL_DRAW_BANNER();
+
+    CursorRow = 4;
+    CursorCol = 0;
+    FB_PRINT("type 'help' for available commands\n\n");
+    FB_PRINT(SHELL_PROMPT);
+
+    for (;;)
+    {
+        KEY_EVENT Ev = KB_POLL();
+        if (!Ev.Pressed) continue;
+
+        if (Ev.Scancode == KEY_ENTER)
+        {
+            FB_PUTCHAR('\n');
+            Buf[Pos] = '\0';
+            SHELL_PROCESS_CMD(Buf, Pos);
+            Pos = 0;
+            FB_PRINT(SHELL_PROMPT);
+        }
+        else if (Ev.Scancode == KEY_BACKSPACE)
+        {
+            if (Pos > 0)
+            {
+                Pos--;
+                if (CursorCol > 0)
+                {
+                    CursorCol--;
+                }
+                else if (CursorRow > 0)
+                {
+                    CursorRow--;
+                    CursorCol = MaxCols - 1;
+                }
+                FB_DRAW_CHAR(
+                    CursorCol * FONT_WIDTH,
+                    CursorRow * FONT_HEIGHT,
+                    ' ', FG_COLOR, BG_COLOR
+                    );
+            }
+        }
+        else if (Ev.Ascii && Pos < SHELL_BUF_SIZE - 1)
+        {
+            Buf[Pos++] = Ev.Ascii;
+            FB_PUTCHAR(Ev.Ascii);
+        }
+    }
 }
 
 static VOID
@@ -322,6 +588,9 @@ KERNEL_MAIN(
 
     INIT_TIMER();
     FB_PRINT("timer armed @ 100hz\n");
+
+    INIT_KEYBOARD();
+    FB_PRINT("keyboard ok\n");
 
     INIT_PMM(BootInfo);
     FB_PRINT("pmm ok\n");
@@ -519,11 +788,8 @@ KERNEL_MAIN(
         VMCALL_HV(HVCALL_ANTIDEBUG_OFF, 0, 0);
     }
 
-    FB_PRINT("\nall demos complete.\n");
+    FB_PRINT("\nall demos complete, entering shell...\n");
     __asm__ volatile("sti");
 
-    for (;;)
-    {
-        __asm__ volatile("hlt");
-    }
+    SHELL_RUN();
 }

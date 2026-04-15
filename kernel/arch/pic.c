@@ -26,8 +26,8 @@ INIT_PIC(VOID)
     OUTB(PIC2_DATA, ICW4_8086);
     IO_WAIT();
 
-    OUTB(PIC1_DATA, 0xFC);
-    OUTB(PIC2_DATA, 0xFF);
+    OUTB(PIC1_DATA, 0xF8);  /* unmask IRQ0, IRQ1, IRQ2 (cascade) */
+    OUTB(PIC2_DATA, 0xEF);  /* unmask IRQ12 (mouse) */
 
     (void)Mask1;
     (void)Mask2;

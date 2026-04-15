@@ -4,6 +4,12 @@
 #include "../include/kernel.h"
 
 VOID
+INIT_DOUBLE_BUFFER(VOID);
+
+VOID
+FB_FLIP(VOID);
+
+VOID
 FB_FILL_RECT(
     UINT32 X,
     UINT32 Y,

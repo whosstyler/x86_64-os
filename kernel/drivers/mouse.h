@@ -1,0 +1,41 @@
+#ifndef MOUSE_H
+#define MOUSE_H
+
+#include "../include/kernel.h"
+
+#define MOUSE_DATA_PORT    0x60
+#define MOUSE_STATUS_PORT  0x64
+#define MOUSE_CMD_PORT     0x64
+
+#define MOUSE_BTN_LEFT   0x01
+#define MOUSE_BTN_RIGHT  0x02
+#define MOUSE_BTN_MID    0x04
+
+typedef struct _MOUSE_STATE
+{
+    INT64  X;
+    INT64  Y;
+    UINT8  Buttons;
+    INT64  DeltaX;
+    INT64  DeltaY;
+} MOUSE_STATE, *PMOUSE_STATE;
+
+VOID
+INIT_MOUSE(VOID);
+
+VOID
+MOUSE_IRQ_HANDLER(VOID);
+
+MOUSE_STATE
+MOUSE_GET_STATE(VOID);
+
+UINT8
+MOUSE_HAS_EVENT(VOID);
+
+MOUSE_STATE
+MOUSE_POLL(VOID);
+
+MOUSE_STATE
+MOUSE_CONSUME(VOID);
+
+#endif

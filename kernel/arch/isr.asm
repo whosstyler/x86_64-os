@@ -51,6 +51,7 @@ ISR_NO_ERR 16           ; #MF x87 FP exception
 ; --- hardware IRQ stubs ---
 IRQ 0, 0                ; PIT timer (IRQ0)
 IRQ 1, 1                ; keyboard  (IRQ1)
+IRQ 12, 12              ; PS/2 mouse (IRQ12)
 
 ; ---- common ISR path ----
 ; stack at this point: SS, RSP, RFLAGS, CS, RIP, [err_code], int_number

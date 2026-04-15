@@ -1,9 +1,46 @@
 #include "draw.h"
+#include "../mm/heap.h"
 
 extern UINT32 *Framebuffer;
 extern UINT32  FbWidth;
 extern UINT32  FbHeight;
 extern UINT32  FbPitch;
+
+UINT32 *BackBuffer  = 0;
+static UINT32 *FrontBuffer = 0;
+
+VOID
+INIT_DOUBLE_BUFFER(VOID)
+{
+    UINT64 Size = (UINT64)FbHeight * FbPitch;
+    BackBuffer = (UINT32 *)KMALLOC(Size);
+
+    UINT8 *Dst = (UINT8 *)BackBuffer;
+    UINT8 *Src = (UINT8 *)Framebuffer;
+    UINT64 I;
+    for (I = 0; I < Size; I++)
+    {
+        Dst[I] = Src[I];
+    }
+
+    FrontBuffer = Framebuffer;
+    Framebuffer = BackBuffer;
+}
+
+VOID
+FB_FLIP(VOID)
+{
+    if (!FrontBuffer) return;
+
+    UINT64 Size = (UINT64)FbHeight * FbPitch;
+    UINT8 *Dst = (UINT8 *)FrontBuffer;
+    UINT8 *Src = (UINT8 *)BackBuffer;
+    UINT64 I;
+    for (I = 0; I < Size; I++)
+    {
+        Dst[I] = Src[I];
+    }
+}
 
 static inline VOID
 FAST_PUT_PIXEL(

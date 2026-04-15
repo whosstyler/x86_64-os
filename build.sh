@@ -73,8 +73,14 @@ BUILD_KERNEL() {
     gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/security.o" "${KERNEL_DIR}/arch/security.c"
     gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/timer.o"    "${KERNEL_DIR}/drivers/timer.c"
     gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/font.o"     "${KERNEL_DIR}/gfx/font.c"
-    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/draw.o"     "${KERNEL_DIR}/gfx/draw.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/draw.o"      "${KERNEL_DIR}/gfx/draw.c"
     gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/keyboard.o" "${KERNEL_DIR}/drivers/keyboard.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/mouse.o"    "${KERNEL_DIR}/drivers/mouse.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/event.o"    "${KERNEL_DIR}/events/event.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/window.o"   "${KERNEL_DIR}/gui/window.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/widget.o"   "${KERNEL_DIR}/gui/widget.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/compositor.o" "${KERNEL_DIR}/gui/compositor.c"
+    gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/desktop.o"  "${KERNEL_DIR}/gui/desktop.c"
     gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/pmm.o"      "${KERNEL_DIR}/mm/pmm.c"
     gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/vmm.o"      "${KERNEL_DIR}/mm/vmm.c"
     gcc ${CFLAGS} -o "${OUTPUT_DIR}/obj/heap.o"     "${KERNEL_DIR}/mm/heap.c"
@@ -98,6 +104,12 @@ BUILD_KERNEL() {
       "${OUTPUT_DIR}/obj/font.o" \
       "${OUTPUT_DIR}/obj/draw.o" \
       "${OUTPUT_DIR}/obj/keyboard.o" \
+      "${OUTPUT_DIR}/obj/mouse.o" \
+      "${OUTPUT_DIR}/obj/event.o" \
+      "${OUTPUT_DIR}/obj/window.o" \
+      "${OUTPUT_DIR}/obj/widget.o" \
+      "${OUTPUT_DIR}/obj/compositor.o" \
+      "${OUTPUT_DIR}/obj/desktop.o" \
       "${OUTPUT_DIR}/obj/pmm.o" \
       "${OUTPUT_DIR}/obj/vmm.o" \
       "${OUTPUT_DIR}/obj/heap.o" \
